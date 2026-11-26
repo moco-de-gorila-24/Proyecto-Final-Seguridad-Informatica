@@ -30,7 +30,15 @@ public class ServerTCP {
     private static final Usuario[] usuarios = {
         new Usuario("Angel", "12345"),
         new Usuario("Jorge", "abc123"),
-        new Usuario("Luis", "password")
+        new Usuario("Luis", "password"),
+        new Usuario("4", "password"),
+        new Usuario("5", "password"),
+        new Usuario("6", "password"),
+        new Usuario("7", "password"),
+        new Usuario("8", "password"),
+        new Usuario("9", "password"),
+        new Usuario("10", "password"),
+        new Usuario("11", "password")
     };
 
     public static void main(String[] args) {
