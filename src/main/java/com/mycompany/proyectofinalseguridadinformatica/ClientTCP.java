@@ -30,6 +30,15 @@ public class ClientTCP {
             PrintWriter salida = new PrintWriter(socket.getOutputStream(), true);
             String respuesta = entrada.readLine();
 
+            if ("AUTENTICACION".equals(respuesta)) {
+                System.out.print("Nombre de usuario: ");
+                String nombre = teclado.nextLine();
+                System.out.print("Contraseña: ");
+                String contrasenia = teclado.nextLine();
+                salida.println(nombre);
+                salida.println(contrasenia);
+                respuesta = entrada.readLine();
+            }
             if (respuesta.startsWith("RECHAZADO")) {
                 System.out.println("El servidor rechazo la conexion.");
                 System.out.println(respuesta.substring(respuesta.indexOf("|") + 1));
