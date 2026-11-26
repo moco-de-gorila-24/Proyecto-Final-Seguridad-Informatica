@@ -10,6 +10,9 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -22,10 +25,12 @@ public class ServerTCP {
     private static final int MAX_CONEXIONES = 10;
     private static final Semaphore limite = new Semaphore(MAX_CONEXIONES);
     private static final AtomicInteger conexionesActivas = new AtomicInteger(0);
+    private static final Set<String> usuariosConectados = ConcurrentHashMap.newKeySet();
+
     private static final Usuario[] usuarios = {
-            new Usuario("Angel", "12345"),
-            new Usuario("Jorge", "abc123"),
-            new Usuario("Luis", "password")
+        new Usuario("Angel", "12345"),
+        new Usuario("Jorge", "abc123"),
+        new Usuario("Luis", "password")
     };
 
     public static void main(String[] args) {
@@ -38,14 +43,11 @@ public class ServerTCP {
                 Socket cliente = servidor.accept();
 
                 if (limite.tryAcquire()) {
-
+                    
                     Thread hilo = new Thread(new ManejadorCliente(cliente));
                     hilo.start();
-
                 } else {
-                    try (PrintWriter salida = new PrintWriter(
-                            cliente.getOutputStream(), true)) {
-
+                    try (PrintWriter salida = new PrintWriter(cliente.getOutputStream(), true)) {
                         salida.println("RECHAZADO|Servidor lleno. Maximo 10 conexiones.");
                     }
 
@@ -54,7 +56,7 @@ public class ServerTCP {
                 }
             }
         } catch (IOException e) {
-            System.out.println("Error al iniciar el servidor.");
+            System.out.println("Error al iniciar el servidor:");
         }
     }
 
@@ -69,10 +71,12 @@ public class ServerTCP {
         public void run() {
 
             boolean autenticado = false;
+            String nombreUsuarioActivo = null;
 
             try (
-                    BufferedReader entrada = new BufferedReader(new InputStreamReader(cliente.getInputStream()));
-                    PrintWriter salida = new PrintWriter(cliente.getOutputStream(), true)) {
+                BufferedReader entrada = new BufferedReader(new InputStreamReader(cliente.getInputStream()));
+                PrintWriter salida = new PrintWriter(cliente.getOutputStream(), true)
+            ) {
 
                 // Solicitar credenciales
                 salida.println("AUTENTICACION");
@@ -85,19 +89,28 @@ public class ServerTCP {
                     salida.println("RECHAZADO|Nombre o contraseña incorrectos.");
                     return;
                 }
-                // Usuario autenticado
-                autenticado = true;
 
+                // Normalizar el nombre para evitar conexiones duplicadas por mayusculas
+                String nombreNormalizado = nombre.trim().toLowerCase(Locale.ROOT);
+
+                // Intentar registrar al usuario activo
+                if (!usuariosConectados.add(nombreNormalizado)) {
+                    salida.println("RECHAZADO|Este usuario ya tiene una sesion activa.");
+                    System.out.println("Intento de conexion duplicada: " + nombre);
+
+                    return;
+                }
+
+                // El usuario ya quedo registrado
+                nombreUsuarioActivo = nombreNormalizado;
+                autenticado = true;
                 int cantidad = conexionesActivas.incrementAndGet();
 
-                System.out.println("Cliente conectado: " + cliente.getInetAddress() + " | Conexiones: " + cantidad);
-
-                salida.println("ACEPTADO|Bienvenido al servidor. Conexiones: " + cantidad + "/" + MAX_CONEXIONES);
-
+                System.out.println("Cliente conectado: " + nombre + " | Conexiones: " + cantidad);
+                salida.println("ACEPTADO|Bienvenido " + nombre + ". Conexiones: " + cantidad + "/" + MAX_CONEXIONES);
                 String mensaje;
 
                 while ((mensaje = entrada.readLine()) != null) {
-
                     if (mensaje.equalsIgnoreCase("SALIR")) {
                         salida.println("DESCONEXION_OK|Te has desconectado.");
                         break;
@@ -115,24 +128,24 @@ public class ServerTCP {
                     cliente.close();
                 } catch (IOException e) {
                 }
-                // Solo descontar si fue autenticado
+                
+                // Liberar usuario solo si fue autenticado
                 if (autenticado) {
+                    usuariosConectados.remove(nombreUsuarioActivo);
                     int cantidad = conexionesActivas.decrementAndGet();
-
-                    System.out.println("Cliente desconectado. Conexiones activas: "
-                            + cantidad);
+                    System.out.println("Cliente desconectado. Conexiones activas: " + cantidad);
                 }
 
                 limite.release();
             }
         }
-        private static boolean autenticar(String nombre, String contrasenia) {
-            for (Usuario usuario : usuarios) {
-                if (usuario.getNombre().equals(nombre) && usuario.getContrasenia().equals(contrasenia)) {
-                    return true;
-                }
+    }
+    private static boolean autenticar(String nombre, String contrasenia) {
+        for (Usuario usuario : usuarios) {
+            if (usuario.getNombre().equals(nombre) && usuario.getContrasenia().equals(contrasenia)) {
+                return true;
             }
-            return false;
         }
-}
+        return false;
+    }
 }
